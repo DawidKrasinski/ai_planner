@@ -47,26 +47,34 @@ export const changeActor = pgEnum("change_actor", ["user", "ai", "system"]);
 export const jobStatus = pgEnum("job_status", ["pending", "running", "succeeded", "failed"]);
 export const progressSource = pgEnum("progress_source", ["user", "ai_assisted", "imported"]);
 
-export const userProfiles = pgTable("user_profiles", {
-  id: uuid("id").primaryKey(),
-  displayName: text("display_name").notNull(),
-  timezone: text("timezone").notNull().default("Europe/Warsaw"),
-  locale: text("locale").notNull().default("pl"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const userProfiles = pgTable(
+  "user_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    singleton: boolean("singleton").notNull().default(true),
+    displayName: text("display_name").notNull(),
+    timezone: text("timezone").notNull().default("Europe/Warsaw"),
+    locale: text("locale").notNull().default("pl"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("user_profiles_singleton").on(table.singleton)],
+);
 
-export const userSettings = pgTable("user_settings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }).unique(),
-  settings: jsonb("settings").$type<SettingsInput>().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const userSettings = pgTable(
+  "user_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    singleton: boolean("singleton").notNull().default(true),
+    settings: jsonb("settings").$type<SettingsInput>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("user_settings_singleton").on(table.singleton)],
+);
 
 export const goals = pgTable("goals", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   category: goalCategory("category").notNull(),
@@ -88,7 +96,6 @@ export const goals = pgTable("goals", {
 
 export const goalProgressEntries = pgTable("goal_progress_entries", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   goalId: uuid("goal_id").notNull(),
   progressValue: numeric("progress_value").notNull(),
   progressUnit: text("progress_unit").notNull(),
@@ -99,7 +106,6 @@ export const goalProgressEntries = pgTable("goal_progress_entries", {
 
 export const routineDefinitions = pgTable("routine_definitions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   title: text("title").notNull(),
   durationMinutes: integer("duration_minutes").notNull(),
   windowStart: text("window_start").notNull(),
@@ -114,7 +120,6 @@ export const routineDefinitions = pgTable("routine_definitions", {
 
 export const fixedCommitmentDefinitions = pgTable("fixed_commitment_definitions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   title: text("title").notNull(),
   startTime: text("start_time").notNull(),
   endTime: text("end_time").notNull(),
@@ -130,7 +135,6 @@ export const weeklyPlans = pgTable(
   "weekly_plans",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id").notNull(),
     periodStart: date("period_start").notNull(),
     periodEnd: date("period_end").notNull(),
     versionNumber: integer("version_number").notNull(),
@@ -141,7 +145,7 @@ export const weeklyPlans = pgTable(
     engineDiagnostics: jsonb("engine_diagnostics").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("plans_user_period_version").on(table.userId, table.periodStart, table.versionNumber)],
+  (table) => [uniqueIndex("plans_period_version").on(table.periodStart, table.versionNumber)],
 );
 
 export const weeklyGoalBudgets = pgTable("weekly_goal_budgets", {
@@ -156,7 +160,6 @@ export const weeklyGoalBudgets = pgTable("weekly_goal_budgets", {
 
 export const calendarItems = pgTable("calendar_items", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   itemType: calendarItemType("item_type").notNull(),
   title: text("title").notNull(),
   description: text("description").notNull().default(""),
@@ -184,7 +187,6 @@ export const calendarItems = pgTable("calendar_items", {
 
 export const goalSessions = pgTable("goal_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   goalId: uuid("goal_id").notNull(),
   calendarItemId: uuid("calendar_item_id"),
   plannedMinutes: integer("planned_minutes").notNull(),
@@ -203,7 +205,6 @@ export const goalSessions = pgTable("goal_sessions", {
 
 export const planChanges = pgTable("plan_changes", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   weeklyPlanId: uuid("weekly_plan_id"),
   changeType: text("change_type").notNull(),
   actor: changeActor("actor").notNull(),
@@ -215,7 +216,6 @@ export const planChanges = pgTable("plan_changes", {
 
 export const aiMemoryEntries = pgTable("ai_memory_entries", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   memoryType: text("memory_type").notNull(),
   content: jsonb("content").notNull(),
   sourceType: text("source_type").notNull(),
@@ -229,7 +229,6 @@ export const aiMemoryEntries = pgTable("ai_memory_entries", {
 
 export const aiConversations = pgTable("ai_conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   screen: text("screen").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -237,7 +236,6 @@ export const aiConversations = pgTable("ai_conversations", {
 export const aiMessages = pgTable("ai_messages", {
   id: uuid("id").primaryKey().defaultRandom(),
   conversationId: uuid("conversation_id").notNull(),
-  userId: uuid("user_id").notNull(),
   role: text("role").notNull(),
   content: text("content").notNull(),
   structured: jsonb("structured"),
@@ -247,7 +245,6 @@ export const aiMessages = pgTable("ai_messages", {
 
 export const backgroundJobs = pgTable("background_jobs", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   jobType: text("job_type").notNull(),
   scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
   startedAt: timestamp("started_at", { withTimezone: true }),
@@ -262,7 +259,6 @@ export const backgroundJobs = pgTable("background_jobs", {
 
 export const integrationConnections = pgTable("integration_connections", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull(),
   provider: text("provider").notNull(),
   encryptedRefreshToken: text("encrypted_refresh_token"),
   scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
@@ -271,7 +267,7 @@ export const integrationConnections = pgTable("integration_connections", {
   connectedAt: timestamp("connected_at", { withTimezone: true }),
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
   lastError: text("last_error"),
-}, (table) => [uniqueIndex("integration_user_provider").on(table.userId, table.provider)]);
+}, (table) => [uniqueIndex("integration_provider").on(table.provider)]);
 
 export const rateLimitBuckets = pgTable("rate_limit_buckets", {
   bucketKey: text("bucket_key").notNull(),

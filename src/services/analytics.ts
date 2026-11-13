@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gte } from "drizzle-orm";
+import { and, gte } from "drizzle-orm";
 import { requireDb } from "@/db/client";
 import { goalProgressEntries, goalSessions, goals } from "@/db/schema";
 import { summarizePeriod } from "@/domain/analytics";
@@ -7,17 +7,16 @@ import { consistencyStreak } from "@/domain/metrics";
 import { addIsoDays, localIsoDate, periodRange } from "@/domain/time";
 import { getProfile, getSettings } from "./records";
 
-export async function getAnalytics(userId: string, period: string) {
-  const profile = await getProfile(userId);
-  const settings = await getSettings(userId);
+export async function getAnalytics(period: string) {
+  const profile = await getProfile();
+  const settings = await getSettings();
   const today = localIsoDate(new Date(), profile.timezone);
   const range = periodRange(period, today);
   const db = requireDb();
-  const sessionRows = await db.select().from(goalSessions).where(eq(goalSessions.userId, userId));
-  const goalRows = await db.select().from(goals).where(eq(goals.userId, userId));
+  const sessionRows = await db.select().from(goalSessions);
+  const goalRows = await db.select().from(goals);
   const names = new Map(goalRows.map((goal) => [goal.id, goal.name]));
   const progressRows = await db.select().from(goalProgressEntries).where(and(
-    eq(goalProgressEntries.userId, userId),
     range ? gte(goalProgressEntries.reportedAt, new Date(`${range.start}T00:00:00.000Z`)) : gte(goalProgressEntries.reportedAt, new Date(0)),
   ));
   const records = sessionRows.flatMap((session) => {

@@ -1,32 +1,27 @@
-import Link from "next/link";
-import { GoalForm } from "@/components/goal-form";
-import { EmptyState, ErrorState } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
+import { GoalsView } from "@/components/meridian/goals-view";
 import { loadPage } from "@/lib/page-data";
-import { listGoals } from "@/services/records";
+import { getSettings, listGoals } from "@/services/records";
 
 export default async function GoalsPage() {
-  const loaded = await loadPage(async () => listGoals((await requireUser()).id));
+  const loaded = await loadPage(async () => {
+    const [goals, settings] = await Promise.all([listGoals(), getSettings()]);
+    return {
+      goals: goals.map((goal) => ({
+        id: goal.id,
+        name: goal.name,
+        category: goal.category,
+        status: goal.status,
+        manualPriority: goal.manualPriority,
+        progressValue: Number(goal.progressValue),
+        currentLevel: goal.currentLevel,
+        desiredLevel: goal.desiredLevel,
+        difficulty: goal.difficulty,
+        weeklyMinutes: settings.categoryBudgets[goal.category] ?? 0,
+      })),
+    };
+  });
   if (!loaded.ok) {
-    return <ErrorState message={loaded.message} />;
+    return <GoalsView state={{ status: "error", message: loaded.message }} />;
   }
-  const goals = loaded.data;
-  return (
-    <div className="grid gap-5">
-      <h1 className="serif text-3xl">Cele</h1>
-      <GoalForm />
-      {goals.length === 0 ? <EmptyState>Nie masz jeszcze celów.</EmptyState> : (
-        <ul className="grid gap-2">
-          {goals.map((goal) => (
-            <li key={goal.id}>
-              <Link href={`/goals/${goal.id}`} className="block rounded-2xl bg-card p-4">
-                <span className="font-semibold">{goal.name}</span>
-                <span className="mt-1 block text-sm text-muted">{goal.category} · P{goal.manualPriority} · {goal.status} · postęp {goal.progressValue}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  return <GoalsView state={{ status: "success", data: loaded.data }} />;
 }

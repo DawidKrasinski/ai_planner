@@ -32,18 +32,18 @@ const scheduledKinds = new Set([
   "flexible_task",
 ]);
 
-export async function generateWeekPlan(userId: string, options: {
+export async function generateWeekPlan(options: {
   anchorDate?: string;
   reason: string;
   actor: "user" | "ai" | "system";
   source: "ai" | "system";
   minuteOverrides?: Record<string, number>;
 }) {
-  const profile = await getProfile(userId);
-  const settings = await getSettings(userId);
+  const profile = await getProfile();
+  const settings = await getSettings();
   const anchor = options.anchorDate ?? localIsoDate(new Date(), profile.timezone);
   const week = weekContaining(anchor);
-  const goalRows = (await listGoals(userId)).filter((goal) => goal.status === "active");
+  const goalRows = (await listGoals()).filter((goal) => goal.status === "active");
   const now = new Date();
   const budgetGoals = goalRows.map((goal) => ({
     id: goal.id,
@@ -80,15 +80,14 @@ export async function generateWeekPlan(userId: string, options: {
     }));
   }
   chosen = applyMinuteOverrides(chosen, options.minuteOverrides);
-  return commitPlan(userId, week, chosen, summary, options.reason, options.actor);
+  return commitPlan(week, chosen, summary, options.reason, options.actor);
 }
 
-export async function replanCurrentWeek(userId: string, reason: string, actor: "user" | "ai" | "system") {
-  const profile = await getProfile(userId);
+export async function replanCurrentWeek(reason: string, actor: "user" | "ai" | "system") {
+  const profile = await getProfile();
   const week = weekContaining(localIsoDate(new Date(), profile.timezone));
   const db = requireDb();
   const active = (await db.select().from(weeklyPlans).where(and(
-    eq(weeklyPlans.userId, userId),
     eq(weeklyPlans.periodStart, week.start),
     eq(weeklyPlans.status, "active"),
   )).limit(1))[0];
@@ -104,19 +103,18 @@ export async function replanCurrentWeek(userId: string, reason: string, actor: "
       allowSleepBorrow: (budget.borrowedFromCategory ?? "").includes("sleep"),
     }))
     : allocateBaselineBudgets(
-      (await listGoals(userId)).filter((goal) => goal.status === "active").map((goal) => ({
+      (await listGoals()).filter((goal) => goal.status === "active").map((goal) => ({
         id: goal.id,
         category: goal.category,
         manualPriority: goal.manualPriority,
         urgency: goal.manualPriority * 100,
       })),
-      (await getSettings(userId)).categoryBudgets,
+      (await getSettings()).categoryBudgets,
     );
-  return commitPlan(userId, week, chosen, active?.aiSummary || "Przeliczono układ tygodnia wokół zmienionych zobowiązań.", reason, actor);
+  return commitPlan(week, chosen, active?.aiSummary || "Przeliczono układ tygodnia wokół zmienionych zobowiązań.", reason, actor);
 }
 
 async function commitPlan(
-  userId: string,
   week: { start: string; end: string },
   chosen: { goalId: string; minutes: number; reason: string; allowTrainingBorrow: boolean; allowSleepBorrow: boolean }[],
   summary: string,
@@ -124,14 +122,14 @@ async function commitPlan(
   actor: "user" | "ai" | "system",
 ) {
   const db = requireDb();
-  const profile = await getProfile(userId);
-  const settings = await getSettings(userId);
-  const goalRows = (await listGoals(userId)).filter((goal) => goal.status === "active");
+  const profile = await getProfile();
+  const settings = await getSettings();
+  const goalRows = (await listGoals()).filter((goal) => goal.status === "active");
   const rangeStart = zonedTimestamp(week.start, "00:00", profile.timezone);
   const rangeEnd = zonedTimestamp(week.end, "23:59", profile.timezone);
-  const existing = await listCalendar(userId, new Date(rangeStart), new Date(rangeEnd));
-  const routines = await listRoutines(userId);
-  const commitments = await listCommitments(userId);
+  const existing = await listCalendar(new Date(rangeStart), new Date(rangeEnd));
+  const routines = await listRoutines();
+  const commitments = await listCommitments();
   const dates = eachIsoDate(week.start, week.end);
   const hard: HardBlockInput[] = [];
   const preservedIds = new Set<string>();
@@ -179,7 +177,6 @@ async function commitPlan(
       });
       newFixed.push({
         id,
-        userId,
         itemType: "fixed_commitment",
         title: commitment.title,
         startAt: new Date(start),
@@ -265,16 +262,13 @@ async function commitPlan(
 
   const planId = await db.transaction(async (tx) => {
     const latest = (await tx.select().from(weeklyPlans).where(and(
-      eq(weeklyPlans.userId, userId),
       eq(weeklyPlans.periodStart, week.start),
     )).orderBy(desc(weeklyPlans.versionNumber)).limit(1))[0];
     await tx.update(weeklyPlans).set({ status: "superseded" }).where(and(
-      eq(weeklyPlans.userId, userId),
       eq(weeklyPlans.periodStart, week.start),
       eq(weeklyPlans.status, "active"),
     ));
     const [plan] = await tx.insert(weeklyPlans).values({
-      userId,
       periodStart: week.start,
       periodEnd: week.end,
       versionNumber: (latest?.versionNumber ?? 0) + 1,
@@ -304,7 +298,6 @@ async function commitPlan(
       await tx.insert(calendarItems).values(newFixed);
     }
     await tx.delete(calendarItems).where(and(
-      eq(calendarItems.userId, userId),
       eq(calendarItems.aiGenerated, true),
       eq(calendarItems.isUserLocked, false),
       eq(calendarItems.status, "scheduled"),
@@ -315,7 +308,6 @@ async function commitPlan(
     if (fresh.length > 0) {
       const rows = fresh.map((block) => ({
         id: crypto.randomUUID(),
-        userId,
         itemType: block.kind,
         title: block.title,
         startAt: new Date(block.start),
@@ -334,7 +326,6 @@ async function commitPlan(
         await tx.insert(goalSessions).values(sessionRows.map((row) => {
           const goal = byId.get(row.sourceGoalId ?? "");
           return {
-            userId,
             goalId: row.sourceGoalId ?? "",
             calendarItemId: row.id,
             plannedMinutes: Math.round((row.endAt.getTime() - row.startAt.getTime()) / 60_000),
@@ -344,7 +335,7 @@ async function commitPlan(
         }));
       }
     }
-    await recordChange(tx, userId, plan.id, "plan_committed", actor, reason, null, {
+    await recordChange(tx, plan.id, "plan_committed", actor, reason, null, {
       summary,
       unscheduled: result.unscheduledMinutes,
       borrowed: result.borrowed,
@@ -361,9 +352,9 @@ async function commitPlan(
   };
 }
 
-export async function moveCalendarItem(userId: string, itemId: string, startAt: string, endAt: string, preference: "once" | "recurring") {
+export async function moveCalendarItem(itemId: string, startAt: string, endAt: string, preference: "once" | "recurring") {
   const db = requireDb();
-  const item = (await db.select().from(calendarItems).where(and(eq(calendarItems.userId, userId), eq(calendarItems.id, itemId))).limit(1))[0];
+  const item = (await db.select().from(calendarItems).where(and(eq(calendarItems.id, itemId))).limit(1))[0];
   if (!item) {
     throw new AppError("NOT_FOUND", "Nie znaleziono elementu kalendarza.", 404);
   }
@@ -381,7 +372,6 @@ export async function moveCalendarItem(userId: string, itemId: string, startAt: 
   if (preference === "recurring") {
     const { aiMemoryEntries } = await import("@/db/schema");
     await db.insert(aiMemoryEntries).values({
-      userId,
       memoryType: "schedule_preference",
       content: { itemId, title: item.title, startAt, endAt, note: "Użytkownik oznaczył przesunięcie jako trwałą preferencję." },
       sourceType: "explicit_user",
@@ -389,11 +379,11 @@ export async function moveCalendarItem(userId: string, itemId: string, startAt: 
       isUserConfirmed: true,
     });
   }
-  await recordChange(db, userId, item.weeklyPlanId, "calendar_moved", "user", preference === "recurring" ? "Trwała zmiana preferencji." : "Jednorazowe przesunięcie.", { start: item.startAt, end: item.endAt }, { start, end });
-  return replanCurrentWeek(userId, "Przeliczenie po ręcznym przesunięciu.", "user");
+  await recordChange(db, item.weeklyPlanId, "calendar_moved", "user", preference === "recurring" ? "Trwała zmiana preferencji." : "Jednorazowe przesunięcie.", { start: item.startAt, end: item.endAt }, { start, end });
+  return replanCurrentWeek("Przeliczenie po ręcznym przesunięciu.", "user");
 }
 
-export async function createCalendarItem(userId: string, input: {
+export async function createCalendarItem(input: {
   itemType: "one_off_event" | "fixed_commitment" | "flexible_task";
   title: string;
   description?: string;
@@ -406,9 +396,8 @@ export async function createCalendarItem(userId: string, input: {
   flexibleWindowEnd?: string | null;
 }) {
   const db = requireDb();
-  const profile = await getProfile(userId);
+  const profile = await getProfile();
   const [item] = await db.insert(calendarItems).values({
-    userId,
     itemType: input.itemType,
     title: input.title,
     description: input.description ?? "",
@@ -422,20 +411,19 @@ export async function createCalendarItem(userId: string, input: {
     flexibleWindowEnd: input.flexibleWindowEnd ? new Date(input.flexibleWindowEnd) : null,
   }).returning();
   if (input.isFixed) {
-    await replanCurrentWeek(userId, "Nowe stałe zdarzenie.", "user");
+    await replanCurrentWeek("Nowe stałe zdarzenie.", "user");
   }
   return item;
 }
 
-export async function restorePlan(userId: string, planId: string) {
+export async function restorePlan(planId: string) {
   const db = requireDb();
-  const plan = (await db.select().from(weeklyPlans).where(and(eq(weeklyPlans.userId, userId), eq(weeklyPlans.id, planId))).limit(1))[0];
+  const plan = (await db.select().from(weeklyPlans).where(and(eq(weeklyPlans.id, planId))).limit(1))[0];
   if (!plan) {
     throw new AppError("NOT_FOUND", "Nie znaleziono wersji planu.", 404);
   }
   const budgets = await db.select().from(weeklyGoalBudgets).where(eq(weeklyGoalBudgets.weeklyPlanId, plan.id));
   return commitPlan(
-    userId,
     { start: plan.periodStart, end: plan.periodEnd },
     budgets.map((budget) => ({
       goalId: budget.goalId,
@@ -475,12 +463,11 @@ function toScheduled(item: typeof calendarItems.$inferSelect): ScheduledBlock {
   };
 }
 
-export async function currentPlan(userId: string) {
+export async function currentPlan() {
   const db = requireDb();
-  const profile = await getProfile(userId);
+  const profile = await getProfile();
   const week = weekContaining(localIsoDate(new Date(), profile.timezone));
   const plan = (await db.select().from(weeklyPlans).where(and(
-    eq(weeklyPlans.userId, userId),
     eq(weeklyPlans.periodStart, week.start),
     eq(weeklyPlans.status, "active"),
   )).limit(1))[0] ?? null;

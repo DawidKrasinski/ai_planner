@@ -1,3 +1,9 @@
+import { LoadingState } from "@/components/meridian/states";
+
 export default function Loading() {
-  return <p className="text-sm text-muted" role="status">Wczytywanie…</p>;
+  return (
+    <div className="page">
+      <LoadingState />
+    </div>
+  );
 }

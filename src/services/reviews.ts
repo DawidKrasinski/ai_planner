@@ -10,21 +10,20 @@ import { logInfo } from "@/lib/log";
 import { generateWeekPlan } from "./planning";
 import { getProfile, getSettings } from "./records";
 
-export async function runEveningReview(userId: string) {
-  const profile = await getProfile(userId);
+export async function runEveningReview() {
+  const profile = await getProfile();
   const today = localIsoDate(new Date(), profile.timezone);
-  return withJob(userId, "evening_review", `evening:${userId}:${today}`, async () => {
+  return withJob("evening_review", `evening:${today}`, async () => {
     const start = new Date(zonedTimestamp(today, "00:00", profile.timezone));
     const end = new Date(zonedTimestamp(today, "23:59", profile.timezone));
     const db = requireDb();
     const items = await db.select().from(calendarItems).where(and(
-      eq(calendarItems.userId, userId),
       eq(calendarItems.itemType, "goal_session"),
       gte(calendarItems.startAt, start),
       lte(calendarItems.startAt, end),
     ));
     const sessions = items.length
-      ? await db.select().from(goalSessions).where(eq(goalSessions.userId, userId))
+      ? await db.select().from(goalSessions)
       : [];
     const byItem = new Map(sessions.map((session) => [session.calendarItemId, session]));
     const missing = items.filter((item) => {
@@ -38,7 +37,7 @@ export async function runEveningReview(userId: string) {
         message: "Brakuje potwierdzonych danych wykonania. Nic nie zostało dopisane automatycznie.",
       };
     }
-    const settings = await getSettings(userId);
+    const settings = await getSettings();
     const summary = summarizePeriod(sessions.filter((session) => session.calendarItemId && items.some((item) => item.id === session.calendarItemId)).map((session) => ({
       goalId: session.goalId,
       goalName: session.goalId,
@@ -50,7 +49,6 @@ export async function runEveningReview(userId: string) {
       status: session.completionStatus,
     })), [], settings.capPlanCompletion);
     await db.insert(aiMemoryEntries).values({
-      userId,
       memoryType: "evening_conclusion",
       content: {
         date: today,
@@ -66,20 +64,19 @@ export async function runEveningReview(userId: string) {
   });
 }
 
-export async function runWeeklyReview(userId: string) {
-  const profile = await getProfile(userId);
-  const settings = await getSettings(userId);
+export async function runWeeklyReview() {
+  const profile = await getProfile();
+  const settings = await getSettings();
   const today = localIsoDate(new Date(), profile.timezone);
   const week = weekContaining(today);
-  return withJob(userId, "weekly_review", `weekly:${userId}:${week.start}`, async () => {
+  return withJob("weekly_review", `weekly:${week.start}`, async () => {
     const db = requireDb();
-    const sessions = await db.select().from(goalSessions).where(eq(goalSessions.userId, userId));
-    const goalRows = await db.select().from(goals).where(eq(goals.userId, userId));
+    const sessions = await db.select().from(goalSessions);
+    const goalRows = await db.select().from(goals);
     const completion = sessions
       .filter((session) => session.actualMinutes !== null && session.efficiencyRating !== null && session.plannedMinutes > 0)
       .map((session) => ((session.actualMinutes ?? 0) * ((session.efficiencyRating ?? 0) / 10) / session.plannedMinutes) * 100);
     const activePlan = (await db.select().from(weeklyPlans).where(and(
-      eq(weeklyPlans.userId, userId),
       eq(weeklyPlans.periodStart, week.start),
       eq(weeklyPlans.status, "active"),
     )).limit(1))[0];
@@ -100,7 +97,6 @@ export async function runWeeklyReview(userId: string) {
     });
     if (assessment.action === "ask") {
       await db.insert(aiMemoryEntries).values({
-        userId,
         memoryType: "weekly_conclusion",
         content: { week: week.start, action: "ask", reason: assessment.reason },
         sourceType: "weekly_review",
@@ -110,7 +106,7 @@ export async function runWeeklyReview(userId: string) {
       return { assessment, plan: null };
     }
     const nextAnchor = addIsoDays(week.end, 1);
-    const plan = await generateWeekPlan(userId, {
+    const plan = await generateWeekPlan({
       anchorDate: nextAnchor,
       reason: "weekly_review",
       actor: "system",
@@ -121,7 +117,7 @@ export async function runWeeklyReview(userId: string) {
   });
 }
 
-async function withJob<T>(userId: string, jobType: string, key: string, work: () => Promise<T>): Promise<T> {
+async function withJob<T>(jobType: string, key: string, work: () => Promise<T>): Promise<T> {
   const db = requireDb();
   const existing = (await db.select().from(backgroundJobs).where(eq(backgroundJobs.idempotencyKey, key)).limit(1))[0];
   if (existing?.status === "succeeded") {
@@ -140,7 +136,6 @@ async function withJob<T>(userId: string, jobType: string, key: string, work: ()
     }).where(eq(backgroundJobs.id, existing.id));
   } else {
     await db.insert(backgroundJobs).values({
-      userId,
       jobType,
       scheduledFor: new Date(),
       startedAt: new Date(),
@@ -158,7 +153,7 @@ async function withJob<T>(userId: string, jobType: string, key: string, work: ()
       resultSummary: result,
       errorCode: needsInput ? "NEEDS_INPUT" : null,
     }).where(eq(backgroundJobs.idempotencyKey, key));
-    logInfo("job.succeeded", { jobType, userId });
+    logInfo("job.succeeded", { jobType });
     return result;
   } catch (error) {
     await db.update(backgroundJobs).set({

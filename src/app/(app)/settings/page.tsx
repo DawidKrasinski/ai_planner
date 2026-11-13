@@ -1,40 +1,49 @@
-import { SettingsForm } from "@/components/settings-form";
-import { ErrorState } from "@/components/ui";
+import { SettingsView } from "@/components/meridian/settings-view";
 import { isGoogleConfigured, parseServerEnv } from "@/lib/env";
-import { requireUser } from "@/lib/auth";
 import { loadPage } from "@/lib/page-data";
-import { getSettings, listMemory } from "@/services/records";
-import { MemoryList } from "@/components/memory-list";
+import { getProfile, getSettings, listMemory } from "@/services/records";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ google?: string }> }) {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ google?: string }>;
+}) {
   const google = (await searchParams).google;
+  const env = parseServerEnv(process.env);
   const loaded = await loadPage(async () => {
-    const user = await requireUser();
-    return { settings: await getSettings(user.id), memory: await listMemory(user.id) };
-  });
-  if (!loaded.ok) {
-    return <ErrorState message={loaded.message} />;
-  }
-  return (
-    <div className="grid gap-5">
-      <h1 className="serif text-3xl">Ustawienia</h1>
-      {google === "connected" ? <p className="text-sm text-accent">Google Calendar został połączony.</p> : null}
-      {google === "error" ? <ErrorState message="Połączenie z Google nie powiodło się. Kalendarz wewnętrzny pozostał bez zmian." /> : null}
-      <SettingsForm settings={loaded.data.settings} googleConfigured={isGoogleConfigured(parseServerEnv(process.env))} />
-      <MemoryList entries={loaded.data.memory.map((entry) => ({
+    const [settings, memory, profile] = await Promise.all([
+      getSettings(),
+      listMemory(),
+      getProfile(),
+    ]);
+    return {
+      settings,
+      profile: {
+        displayName: profile.displayName,
+        timezone: profile.timezone,
+        locale: profile.locale,
+      },
+      memory: memory.map((entry) => ({
         id: entry.id,
         type: entry.memoryType,
         text: readMemory(entry.content),
         source: entry.sourceType,
         confirmed: entry.isUserConfirmed,
-      }))} />
-      <section className="rounded-2xl bg-card p-4 text-sm">
-        <h2 className="font-semibold">Dane</h2>
-        <p className="mt-2 text-muted">Historia jest przechowywana bezterminowo, dopóki jej świadomie nie usuniesz. Eksport nie zawiera tokenów.</p>
-        <a className="mt-3 inline-flex min-h-11 items-center underline" href="/api/account">Pobierz eksport JSON</a>
-      </section>
-    </div>
-  );
+      })),
+      googleConfigured: isGoogleConfigured(env),
+      googleStatus: google === "connected" ? ("connected" as const) : google === "error" ? ("error" as const) : ("idle" as const),
+      aiProviderLabel:
+        env.AI_PROVIDER === "mock"
+          ? "Tryb lokalny (mock)"
+          : env.AI_PROVIDER === "openai"
+            ? "OpenAI"
+            : "Anthropic",
+    };
+  });
+  if (!loaded.ok) {
+    return <SettingsView state={{ status: "error", message: loaded.message }} />;
+  }
+  return <SettingsView state={{ status: "success", data: loaded.data }} />;
 }
 
 function readMemory(content: unknown): string {

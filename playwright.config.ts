@@ -6,7 +6,7 @@ export default defineConfig({
   use: { baseURL: "http://127.0.0.1:3000" },
   webServer: {
     command: "pnpm dev --port 3000",
-    url: "http://127.0.0.1:3000/login",
+    url: "http://127.0.0.1:3000/dashboard",
     reuseExistingServer: true,
     timeout: 120_000,
   },

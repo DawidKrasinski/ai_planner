@@ -2,9 +2,10 @@
 
 ## 1. Product experience
 
-The application is a responsive web dashboard with a persistent side
-navigation on desktop and an appropriate compact navigation pattern on
-mobile.
+The shipped UI follows the Meridian visual design (DM Sans, custom
+component CSS with Tailwind available). The application is a responsive
+web dashboard with a persistent side navigation on desktop and an
+appropriate compact navigation pattern on mobile.
 
 The AI assistant is a small contextual panel available from every main
 screen, not a separate full-screen chat as the primary experience.

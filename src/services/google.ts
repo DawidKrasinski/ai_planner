@@ -11,12 +11,11 @@ import { replanCurrentWeek } from "./planning";
 const readonlyScope = "https://www.googleapis.com/auth/calendar.readonly";
 const exportScope = "https://www.googleapis.com/auth/calendar.events";
 
-export function googleStatus(userId?: string) {
+export function googleStatus() {
   const env = parseServerEnv(process.env);
   return {
     configured: isGoogleConfigured(env),
     exportAvailable: Boolean(env.GOOGLE_CLIENT_ID),
-    userId: userId ?? null,
   };
 }
 
@@ -36,7 +35,7 @@ export function googleAuthUrl(state: string, exportEnabled: boolean) {
   return url.toString();
 }
 
-export async function storeGoogleCode(userId: string, code: string, exportEnabled: boolean) {
+export async function storeGoogleCode(code: string, exportEnabled: boolean) {
   const env = parseServerEnv(process.env);
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REDIRECT_URI || !env.TOKEN_ENCRYPTION_KEY) {
     throw new AppError("INTEGRATION_NOT_CONNECTED", "Brakuje konfiguracji OAuth albo klucza szyfrowania.", 503);
@@ -63,7 +62,6 @@ export async function storeGoogleCode(userId: string, code: string, exportEnable
   const db = requireDb();
   const encrypted = encryptSecret(refresh, env.TOKEN_ENCRYPTION_KEY);
   await db.insert(integrationConnections).values({
-    userId,
     provider: "google",
     encryptedRefreshToken: encrypted,
     scopes: [exportEnabled ? exportScope : readonlyScope],
@@ -71,7 +69,7 @@ export async function storeGoogleCode(userId: string, code: string, exportEnable
     exportEnabled,
     connectedAt: new Date(),
   }).onConflictDoUpdate({
-    target: [integrationConnections.userId, integrationConnections.provider],
+    target: [integrationConnections.provider],
     set: {
       encryptedRefreshToken: encrypted,
       scopes: [exportEnabled ? exportScope : readonlyScope],
@@ -83,20 +81,19 @@ export async function storeGoogleCode(userId: string, code: string, exportEnable
   });
 }
 
-export async function disconnectGoogle(userId: string) {
+export async function disconnectGoogle() {
   const db = requireDb();
   await db.update(integrationConnections).set({
     status: "disconnected",
     encryptedRefreshToken: null,
     lastError: null,
-  }).where(and(eq(integrationConnections.userId, userId), eq(integrationConnections.provider, "google")));
+  }).where(and(eq(integrationConnections.provider, "google")));
 }
 
-export async function syncGoogle(userId: string) {
+export async function syncGoogle() {
   const env = parseServerEnv(process.env);
   const db = requireDb();
   const connection = (await db.select().from(integrationConnections).where(and(
-    eq(integrationConnections.userId, userId),
     eq(integrationConnections.provider, "google"),
   )).limit(1))[0];
   if (!connection || connection.status !== "connected" || !connection.encryptedRefreshToken || !env.TOKEN_ENCRYPTION_KEY) {
@@ -105,15 +102,15 @@ export async function syncGoogle(userId: string) {
   try {
     const refresh = decryptSecret(connection.encryptedRefreshToken, env.TOKEN_ENCRYPTION_KEY);
     const access = await refreshAccessToken(refresh);
-    const profile = await getProfile(userId);
-    const imported = await importEvents(userId, access, profile.timezone);
+    const profile = await getProfile();
+    const imported = await importEvents(access, profile.timezone);
     let exported = 0;
     if (connection.exportEnabled) {
-      exported = await exportEvents(userId, access);
+      exported = await exportEvents(access);
     }
     await db.update(integrationConnections).set({ lastSyncAt: new Date(), lastError: null }).where(eq(integrationConnections.id, connection.id));
     if (imported > 0) {
-      await replanCurrentWeek(userId, "Synchronizacja zewnętrznych wydarzeń.", "system");
+      await replanCurrentWeek("Synchronizacja zewnętrznych wydarzeń.", "system");
     }
     return { imported, exported };
   } catch (error) {
@@ -149,7 +146,7 @@ async function refreshAccessToken(refreshToken: string) {
   return String(payload.access_token);
 }
 
-async function importEvents(userId: string, accessToken: string, timezone: string) {
+async function importEvents(accessToken: string, timezone: string) {
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + 14 * 86_400_000).toISOString();
   const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
@@ -174,7 +171,6 @@ async function importEvents(userId: string, accessToken: string, timezone: strin
       continue;
     }
     const existing = (await db.select().from(calendarItems).where(and(
-      eq(calendarItems.userId, userId),
       eq(calendarItems.externalId, record.id),
     )).limit(1))[0];
     if (existing?.externalEtag === record.etag) {
@@ -190,7 +186,6 @@ async function importEvents(userId: string, accessToken: string, timezone: strin
       }).where(eq(calendarItems.id, existing.id));
     } else {
       await db.insert(calendarItems).values({
-        userId,
         itemType: "one_off_event",
         title: record.summary || "Wydarzenie Google",
         startAt: new Date(record.start.dateTime),
@@ -207,10 +202,9 @@ async function importEvents(userId: string, accessToken: string, timezone: strin
   return imported;
 }
 
-async function exportEvents(userId: string, accessToken: string) {
+async function exportEvents(accessToken: string) {
   const db = requireDb();
   const items = await db.select().from(calendarItems).where(and(
-    eq(calendarItems.userId, userId),
     eq(calendarItems.itemType, "goal_session"),
     eq(calendarItems.aiGenerated, true),
   ));

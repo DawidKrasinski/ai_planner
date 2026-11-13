@@ -10,8 +10,9 @@
     where practical.
 -   Store timestamps in UTC and retain the user's IANA timezone for
     calendar interpretation.
--   Protect all user-owned records with Supabase Row Level Security
-    (RLS), even in a single-user deployment.
+-   The database holds one owner's data. Tables do not carry a user id,
+    and access control is the private deployment rather than row-level
+    policies.
 
 ## 2. Recommended core entities
 
@@ -19,13 +20,13 @@ The following is a logical model, not a final migration script.
 
 ### 2.1 `user_profile`
 
-One record for the single application user. - `id` UUID, primary key,
-linked to Supabase Auth user. - `display_name` - `timezone` (IANA
+One local profile, not an account. - `id` UUID, primary key.
+- `display_name` - `timezone` (IANA
 identifier) - `locale` (initially `pl`) - `created_at`, `updated_at`
 
 ### 2.2 `user_settings`
 
-Planning and application preferences. - `id` - `user_id` - `wake_time`,
+Planning and application preferences. One row. - `id` - `wake_time`,
 `sleep_time` - `category_budgets` JSONB or normalized category-budget
 rows - `priority_extra_time_limits` JSONB - `transition_minutes` -
 `break_preferences` - `preferred_day_pattern` - `energy_profile` -
@@ -37,7 +38,6 @@ tables if settings become frequently queried or independently versioned.
 ### 2.3 `goals`
 
 -   `id`
--   `user_id`
 -   `name`
 -   `description`
 -   `category` enum: `training`, `learning_work`, `leisure`
@@ -56,7 +56,7 @@ tables if settings become frequently queried or independently versioned.
 
 Represents fixed commitments, routines, one-off events, and generated
 goal sessions, or use a shared base table plus subtype tables if
-stronger constraints are needed. - `id` - `user_id` - `item_type`:
+stronger constraints are needed. - `id` - `item_type`:
 `goal_session`, `one_off_event`, `routine_occurrence`,
 `fixed_commitment` - `title` - `description` - `start_at`, `end_at` -
 `timezone` - `is_fixed` - `is_user_locked` - `source_goal_id` nullable -
@@ -69,7 +69,7 @@ difficult to enforce. A normalized subtype design is acceptable.
 
 ### 2.5 `goal_sessions`
 
-Execution record for scheduled or ad-hoc work. - `id` - `user_id` -
+Execution record for scheduled or ad-hoc work. - `id` -
 `goal_id` - `calendar_item_id` nullable - `planned_minutes` -
 `actual_minutes` - `efficiency_rating` integer 1--10 nullable -
 `effective_minutes` - `difficulty_snapshot` integer 1--10 -
@@ -82,7 +82,6 @@ goal's current difficulty is edited later.
 ### 2.6 `goal_progress_entries`
 
 -   `id`
--   `user_id`
 -   `goal_id`
 -   `progress_value`
 -   `progress_unit`
@@ -96,7 +95,6 @@ history when current progress changes.
 ### 2.7 `weekly_plans`
 
 -   `id`
--   `user_id`
 -   `period_start`, `period_end`
 -   `version_number`
 -   `status`: `draft`, `active`, `superseded`, `restored`
@@ -117,14 +115,13 @@ history when current progress changes.
 
 ### 2.9 `plan_changes`
 
-Append-only audit record: - `id` - `user_id` - `weekly_plan_id` -
+Append-only audit record: - `id` - `weekly_plan_id` -
 `change_type` - `actor`: `user`, `ai`, `system` - `before_snapshot`
 JSONB - `after_snapshot` JSONB - `reason` - `created_at`
 
 ### 2.10 `ai_memory_entries`
 
 -   `id`
--   `user_id`
 -   `memory_type`
 -   `content` JSONB or typed columns
 -   `source_type`
@@ -138,7 +135,7 @@ Memory entries must be inspectable and editable by the user.
 ### 2.11 `background_jobs` / `review_runs`
 
 Track evening reviews, weekly reviews, and other scheduled operations: -
-`id` - `user_id` - `job_type` - `scheduled_for` - `started_at`,
+`id` - `job_type` - `scheduled_for` - `started_at`,
 `completed_at` - `status` - `idempotency_key` - `result_summary` -
 `error_code`, `error_details`
 
@@ -147,7 +144,7 @@ on in-memory execution.
 
 ### 2.12 `integration_connections`
 
-For optional Google Calendar integration: - `id` - `user_id` -
+For optional Google Calendar integration: - `id` -
 `provider` - encrypted token references or secure secret-store
 references - `scopes` - `status` - `connected_at`, `last_sync_at`
 
@@ -177,18 +174,14 @@ tables.
 
 ## 5. Indexing and constraints
 
-Recommended: - Index user-owned tables by `user_id`. - Index calendar
-items by `(user_id, start_at, end_at)`. - Index sessions by
-`(user_id, goal_id, started_at)`. - Index progress entries by
+Recommended: - Index calendar items by `(start_at, end_at)`. - Index sessions by `(goal_id, started_at)`. - Index progress entries by
 `(goal_id, reported_at)`. - Index plans by
-`(user_id, period_start, version_number)`. - Add database checks for
+`(period_start, version_number)`. - Add database checks for
 priority 1--6, difficulty 1--10, efficiency 1--10, and valid time
 ranges. - Enforce non-overlap in the scheduling engine and consider
 PostgreSQL exclusion constraints for relevant fixed-time rows.
 
-## 6. RLS
+## 6. Access
 
-Enable RLS on every user-owned table. Policies should ensure the
-authenticated user can access only rows associated with their own
-`user_id`. Never rely on the fact that the initial deployment has only
-one expected user as a substitute for access control.
+There is no login and no per-user row. The database is private to this
+deployment. Scheduled jobs remain protected by `CRON_SECRET`.

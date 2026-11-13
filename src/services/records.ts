@@ -19,44 +19,47 @@ import {
 import { defaultSettings } from "@/domain/defaults";
 import { SettingsSchema, type CreateGoalInput, type SettingsInput } from "@/domain/schemas";
 
-export async function ensureProfile(userId: string, email: string) {
+export async function ensureProfile() {
   const db = requireDb();
-  const existing = await db.select().from(userProfiles).where(eq(userProfiles.id, userId)).limit(1);
-  if (existing[0]) {
-    return existing[0];
+  const existing = (await db.select().from(userProfiles).limit(1))[0];
+  if (existing) {
+    const settings = (await db.select().from(userSettings).limit(1))[0];
+    if (!settings) {
+      await db.insert(userSettings).values({ settings: defaultSettings });
+    }
+    return existing;
   }
-  await db.insert(userProfiles).values({
-    id: userId,
-    displayName: email.split("@")[0] || "Użytkownik",
+  const [profile] = await db.insert(userProfiles).values({
+    displayName: "Profil",
     timezone: "Europe/Warsaw",
     locale: "pl",
-  });
-  await db.insert(userSettings).values({ userId, settings: defaultSettings });
-  return (await db.select().from(userProfiles).where(eq(userProfiles.id, userId)))[0];
-}
-
-export async function getProfile(userId: string) {
-  const db = requireDb();
-  const profile = (await db.select().from(userProfiles).where(eq(userProfiles.id, userId)).limit(1))[0];
+  }).returning();
   if (!profile) {
-    throw new AppError("NOT_FOUND", "Nie znaleziono profilu.", 404);
+    throw new AppError("INTERNAL_ERROR", "Nie udało się utworzyć profilu.", 500);
   }
+  await db.insert(userSettings).values({ settings: defaultSettings });
   return profile;
 }
 
-export async function updateProfile(userId: string, input: { displayName?: string; timezone?: string }) {
+export async function getProfile() {
+  return ensureProfile();
+}
+
+export async function updateProfile(input: { displayName?: string; timezone?: string }) {
   const db = requireDb();
+  const profile = await ensureProfile();
   await db.update(userProfiles).set({
     ...(input.displayName ? { displayName: input.displayName } : {}),
     ...(input.timezone ? { timezone: input.timezone } : {}),
     updatedAt: new Date(),
-  }).where(eq(userProfiles.id, userId));
-  return getProfile(userId);
+  }).where(eq(userProfiles.id, profile.id));
+  return (await db.select().from(userProfiles).where(eq(userProfiles.id, profile.id)))[0];
 }
 
-export async function getSettings(userId: string): Promise<SettingsInput> {
+export async function getSettings(): Promise<SettingsInput> {
   const db = requireDb();
-  const row = (await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1))[0];
+  await ensureProfile();
+  const row = (await db.select().from(userSettings).limit(1))[0];
   if (!row) {
     return defaultSettings;
   }
@@ -67,32 +70,32 @@ export async function getSettings(userId: string): Promise<SettingsInput> {
   return parsed.data;
 }
 
-export async function saveSettings(userId: string, settings: SettingsInput) {
+export async function saveSettings(settings: SettingsInput) {
   const db = requireDb();
   const parsed = SettingsSchema.parse(settings);
-  await db.update(userSettings).set({ settings: parsed, updatedAt: new Date() }).where(eq(userSettings.userId, userId));
-  await recordChange(db, userId, null, "settings", "user", "Zmiana ustawień planowania.", null, { settings: parsed });
+  await ensureProfile();
+  await db.update(userSettings).set({ settings: parsed, updatedAt: new Date() });
+  await recordChange(db, null, "settings", "user", "Zmiana ustawień planowania.", null, { settings: parsed });
   return parsed;
 }
 
-export async function listGoals(userId: string) {
+export async function listGoals() {
   const db = requireDb();
-  return db.select().from(goals).where(eq(goals.userId, userId)).orderBy(asc(goals.manualPriority), asc(goals.name));
+  return db.select().from(goals).orderBy(asc(goals.manualPriority), asc(goals.name));
 }
 
-export async function getGoal(userId: string, goalId: string) {
+export async function getGoal(goalId: string) {
   const db = requireDb();
-  const goal = (await db.select().from(goals).where(and(eq(goals.userId, userId), eq(goals.id, goalId))).limit(1))[0];
+  const goal = (await db.select().from(goals).where(eq(goals.id, goalId)).limit(1))[0];
   if (!goal) {
     throw new AppError("NOT_FOUND", "Nie znaleziono celu.", 404);
   }
   return goal;
 }
 
-export async function createGoal(userId: string, input: CreateGoalInput, actor: "user" | "ai" = "user") {
+export async function createGoal(input: CreateGoalInput, actor: "user" | "ai" = "user") {
   const db = requireDb();
   const [goal] = await db.insert(goals).values({
-    userId,
     name: input.name,
     description: input.description ?? "",
     category: input.category,
@@ -110,13 +113,13 @@ export async function createGoal(userId: string, input: CreateGoalInput, actor: 
   if (!goal) {
     throw new AppError("INTERNAL_ERROR", "Nie udało się zapisać celu.", 500);
   }
-  await recordChange(db, userId, null, "goal_created", actor, "Utworzenie celu.", null, { goalId: goal.id, name: goal.name });
+  await recordChange(db, null, "goal_created", actor, "Utworzenie celu.", null, { goalId: goal.id, name: goal.name });
   return goal;
 }
 
-export async function updateGoal(userId: string, goalId: string, patch: Partial<CreateGoalInput> & { status?: "active" | "paused" | "completed" | "archived" }) {
+export async function updateGoal(goalId: string, patch: Partial<CreateGoalInput> & { status?: "active" | "paused" | "completed" | "archived" }) {
   const db = requireDb();
-  const current = await getGoal(userId, goalId);
+  const current = await getGoal(goalId);
   await db.update(goals).set({
     name: patch.name ?? current.name,
     description: patch.description ?? current.description,
@@ -133,16 +136,15 @@ export async function updateGoal(userId: string, goalId: string, patch: Partial<
     status: patch.status ?? current.status,
     completedAt: patch.status === "completed" ? new Date() : patch.status ? null : current.completedAt,
     updatedAt: new Date(),
-  }).where(and(eq(goals.userId, userId), eq(goals.id, goalId)));
-  await recordChange(db, userId, null, "goal_updated", "user", "Edycja celu.", { goalId, status: current.status }, { goalId, status: patch.status ?? current.status });
-  return getGoal(userId, goalId);
+  }).where(eq(goals.id, goalId));
+  await recordChange(db, null, "goal_updated", "user", "Edycja celu.", { goalId, status: current.status }, { goalId, status: patch.status ?? current.status });
+  return getGoal(goalId);
 }
 
-export async function addProgress(userId: string, goalId: string, input: { progressValue: number; progressMethod: string; notes?: string; source?: "user" | "ai_assisted" | "imported" }) {
+export async function addProgress(goalId: string, input: { progressValue: number; progressMethod: string; notes?: string; source?: "user" | "ai_assisted" | "imported" }) {
   const db = requireDb();
-  await getGoal(userId, goalId);
+  await getGoal(goalId);
   await db.insert(goalProgressEntries).values({
-    userId,
     goalId,
     progressValue: String(input.progressValue),
     progressUnit: input.progressMethod,
@@ -153,48 +155,46 @@ export async function addProgress(userId: string, goalId: string, input: { progr
     progressValue: String(input.progressValue),
     progressMethod: input.progressMethod,
     updatedAt: new Date(),
-  }).where(and(eq(goals.userId, userId), eq(goals.id, goalId)));
-  return listProgress(userId, goalId);
+  }).where(eq(goals.id, goalId));
+  return listProgress(goalId);
 }
 
-export async function listProgress(userId: string, goalId: string) {
+export async function listProgress(goalId: string) {
   const db = requireDb();
-  return db.select().from(goalProgressEntries).where(and(eq(goalProgressEntries.userId, userId), eq(goalProgressEntries.goalId, goalId))).orderBy(desc(goalProgressEntries.reportedAt));
+  return db.select().from(goalProgressEntries).where(eq(goalProgressEntries.goalId, goalId)).orderBy(desc(goalProgressEntries.reportedAt));
 }
 
-export async function listCalendar(userId: string, start: Date, end: Date) {
+export async function listCalendar(start: Date, end: Date) {
   const db = requireDb();
   return db.select().from(calendarItems).where(and(
-    eq(calendarItems.userId, userId),
     lte(calendarItems.startAt, end),
     gte(calendarItems.endAt, start),
     sql`${calendarItems.status} <> 'cancelled'`,
   )).orderBy(asc(calendarItems.startAt));
 }
 
-export async function listRoutines(userId: string) {
+export async function listRoutines() {
   const db = requireDb();
-  return db.select().from(routineDefinitions).where(and(eq(routineDefinitions.userId, userId), eq(routineDefinitions.isActive, true)));
+  return db.select().from(routineDefinitions).where(eq(routineDefinitions.isActive, true));
 }
 
-export async function listCommitments(userId: string) {
+export async function listCommitments() {
   const db = requireDb();
-  return db.select().from(fixedCommitmentDefinitions).where(and(eq(fixedCommitmentDefinitions.userId, userId), eq(fixedCommitmentDefinitions.isActive, true)));
+  return db.select().from(fixedCommitmentDefinitions).where(eq(fixedCommitmentDefinitions.isActive, true));
 }
 
-export async function listChanges(userId: string) {
+export async function listChanges() {
   const db = requireDb();
-  return db.select().from(planChanges).where(eq(planChanges.userId, userId)).orderBy(desc(planChanges.createdAt)).limit(100);
+  return db.select().from(planChanges).orderBy(desc(planChanges.createdAt)).limit(100);
 }
 
-export async function listPlans(userId: string) {
+export async function listPlans() {
   const db = requireDb();
-  return db.select().from(weeklyPlans).where(eq(weeklyPlans.userId, userId)).orderBy(desc(weeklyPlans.createdAt)).limit(50);
+  return db.select().from(weeklyPlans).orderBy(desc(weeklyPlans.createdAt)).limit(50);
 }
 
 export async function recordChange(
   db: Database,
-  userId: string,
   weeklyPlanId: string | null,
   changeType: string,
   actor: "user" | "ai" | "system",
@@ -203,7 +203,6 @@ export async function recordChange(
   afterSnapshot: unknown,
 ) {
   await db.insert(planChanges).values({
-    userId,
     weeklyPlanId,
     changeType,
     actor,
@@ -213,17 +212,17 @@ export async function recordChange(
   });
 }
 
-export async function listSessionsForGoal(userId: string, goalId: string) {
+export async function listSessionsForGoal(goalId: string) {
   const db = requireDb();
-  return db.select().from(goalSessions).where(and(eq(goalSessions.userId, userId), eq(goalSessions.goalId, goalId))).orderBy(desc(goalSessions.createdAt));
+  return db.select().from(goalSessions).where(eq(goalSessions.goalId, goalId)).orderBy(desc(goalSessions.createdAt));
 }
 
-export async function listMemory(userId: string) {
+export async function listMemory() {
   const db = requireDb();
-  return db.select().from(aiMemoryEntries).where(eq(aiMemoryEntries.userId, userId)).orderBy(desc(aiMemoryEntries.updatedAt));
+  return db.select().from(aiMemoryEntries).orderBy(desc(aiMemoryEntries.updatedAt));
 }
 
-export async function createRoutine(userId: string, input: {
+export async function createRoutine(input: {
   title: string;
   durationMinutes: number;
   windowStart: string;
@@ -234,7 +233,6 @@ export async function createRoutine(userId: string, input: {
 }) {
   const db = requireDb();
   const [row] = await db.insert(routineDefinitions).values({
-    userId,
     title: input.title,
     durationMinutes: input.durationMinutes,
     windowStart: input.windowStart,
@@ -246,7 +244,7 @@ export async function createRoutine(userId: string, input: {
   return row;
 }
 
-export async function createCommitment(userId: string, input: {
+export async function createCommitment(input: {
   title: string;
   startTime: string;
   endTime: string;
@@ -256,7 +254,6 @@ export async function createCommitment(userId: string, input: {
 }) {
   const db = requireDb();
   const [row] = await db.insert(fixedCommitmentDefinitions).values({
-    userId,
     ...input,
     travelMinutes: input.travelMinutes ?? 0,
     preparationMinutes: input.preparationMinutes ?? 0,
@@ -264,9 +261,9 @@ export async function createCommitment(userId: string, input: {
   return row;
 }
 
-export async function replaceMemory(userId: string, memoryId: string, content: string, confirmed: boolean) {
+export async function replaceMemory(memoryId: string, content: string, confirmed: boolean) {
   const db = requireDb();
-  const current = (await db.select().from(aiMemoryEntries).where(and(eq(aiMemoryEntries.userId, userId), eq(aiMemoryEntries.id, memoryId))).limit(1))[0];
+  const current = (await db.select().from(aiMemoryEntries).where(eq(aiMemoryEntries.id, memoryId)).limit(1))[0];
   if (!current) {
     throw new AppError("NOT_FOUND", "Nie znaleziono wpisu pamięci.", 404);
   }
@@ -281,17 +278,16 @@ export async function replaceMemory(userId: string, memoryId: string, content: s
   }).where(eq(aiMemoryEntries.id, memoryId));
 }
 
-export async function deleteMemory(userId: string, memoryId: string) {
+export async function deleteMemory(memoryId: string) {
   const db = requireDb();
-  await db.delete(aiMemoryEntries).where(and(eq(aiMemoryEntries.userId, userId), eq(aiMemoryEntries.id, memoryId)));
+  await db.delete(aiMemoryEntries).where(eq(aiMemoryEntries.id, memoryId));
 }
 
-export async function listOpenSessions(userId: string) {
+export async function listOpenSessions() {
   const db = requireDb();
-  return db.select().from(goalSessions).where(and(
-    eq(goalSessions.userId, userId),
+  return db.select().from(goalSessions).where(
     sql`${goalSessions.completionStatus} in ('not_started', 'in_progress', 'partial')`,
-  )).limit(12);
+  ).limit(12);
 }
 
 export { weeklyGoalBudgets };

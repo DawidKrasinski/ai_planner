@@ -15,8 +15,8 @@
 
   Database                            Supabase PostgreSQL
 
-  Authentication                      Supabase Auth is the recommended
-                                      Supabase capability
+  Access                              No application login. One local
+                                      dataset.
 
   Hosting                             Vercel + Supabase
 
@@ -68,8 +68,6 @@ Browser (Next.js UI)
         v
 Next.js Server Components / Route Handlers
         |
-        +---- Authentication & authorization (Supabase Auth)
-        |
         +---- Application services
         |         |
         |         +---- Goal & calendar domain services
@@ -96,7 +94,7 @@ authoritative scheduling rules.
 
 ### 4.2 API / application layer
 
-Responsible for authentication, authorization, input validation,
+Responsible for input validation,
 orchestration, transactions, and domain service calls.
 
 ### 4.3 AI orchestration layer
@@ -112,8 +110,8 @@ provider or UI framework. It should be unit-testable independently.
 
 ### 4.5 Persistence layer
 
-Supabase PostgreSQL is the source of truth. Use migrations, constraints,
-RLS, and transactional writes for plan commits.
+PostgreSQL is the source of truth. Use migrations, constraints, and
+transactional writes for plan commits.
 
 ## 5. Background execution
 

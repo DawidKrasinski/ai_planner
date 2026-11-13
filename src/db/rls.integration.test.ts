@@ -4,22 +4,23 @@ import { describe, expect, it } from "vitest";
 const databaseUrl = process.env.DATABASE_URL;
 const describeDb = databaseUrl ? describe : describe.skip;
 
-describeDb("row level security", () => {
-  it("hides another user's goals from the authenticated role", async () => {
+describeDb("single-owner database", () => {
+  it("stores goals without a user owner column", async () => {
     const sql = postgres(databaseUrl ?? "", { max: 1 });
-    const first = crypto.randomUUID();
-    const second = crypto.randomUUID();
-    await sql`INSERT INTO auth.users (id, email) VALUES (${first}, ${"a@example.com"}), (${second}, ${"b@example.com"})`;
-    await sql`INSERT INTO user_profiles (id, display_name) VALUES (${first}, ${"A"}), (${second}, ${"B"})`;
-    await sql`INSERT INTO goals (user_id, name, category, manual_priority, difficulty) VALUES (${first}, ${"A goal"}, ${"training"}, 2, 4), (${second}, ${"B goal"}, ${"leisure"}, 3, 5)`;
-    await sql.begin(async (tx) => {
-      await tx.unsafe("SET LOCAL ROLE authenticated");
-      await tx`SELECT set_config('request.jwt.claim.sub', ${first}, true)`;
-      const rows = await tx<{ name: string }[]>`SELECT name FROM goals ORDER BY name`;
-      expect(rows.map((row) => row.name)).toEqual(["A goal"]);
-    });
-    await sql`DELETE FROM user_profiles WHERE id IN (${first}, ${second})`;
-    await sql`DELETE FROM auth.users WHERE id IN (${first}, ${second})`;
+    const columns = await sql<{ column_name: string }[]>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'goals' AND column_name = 'user_id'
+    `;
+    expect(columns).toEqual([]);
+    const id = crypto.randomUUID();
+    await sql`
+      INSERT INTO goals (id, name, category, manual_priority, difficulty)
+      VALUES (${id}, ${"Bez właściciela"}, ${"training"}, 2, 4)
+    `;
+    const rows = await sql<{ name: string }[]>`SELECT name FROM goals WHERE id = ${id}`;
+    expect(rows.map((row) => row.name)).toEqual(["Bez właściciela"]);
+    await sql`DELETE FROM goals WHERE id = ${id}`;
     await sql.end();
   });
 });

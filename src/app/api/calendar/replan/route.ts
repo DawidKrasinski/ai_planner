@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { api } from "@/lib/api";
-import { requireUser } from "@/lib/auth";
 import { generateWeekPlan, replanCurrentWeek } from "@/services/planning";
 
 const BodySchema = z.strictObject({
@@ -11,19 +10,18 @@ const BodySchema = z.strictObject({
 
 export async function POST(request: Request) {
   return api(async () => {
-    const user = await requireUser();
     const body = BodySchema.parse(await request.json().catch(() => ({})));
     if (body.source === "ai") {
-      return generateWeekPlan(user.id, {
+      return generateWeekPlan({
         reason: body.reason ?? "Prośba użytkownika o plan AI",
         actor: "ai",
         source: "ai",
       });
     }
     if (body.immediate) {
-      return replanCurrentWeek(user.id, body.reason ?? "Ręczne przeliczenie", "user");
+      return replanCurrentWeek(body.reason ?? "Ręczne przeliczenie", "user");
     }
-    return generateWeekPlan(user.id, {
+    return generateWeekPlan({
       reason: body.reason ?? "Plan systemowy",
       actor: "system",
       source: "system",

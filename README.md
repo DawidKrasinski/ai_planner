@@ -65,7 +65,7 @@ external calendar synchronization is not configured.
 
 ## Confirmed baseline stack
 
--   Frontend: Next.js, React, TypeScript.
+-   Frontend: Next.js, React, TypeScript, Meridian UI design.
 -   Backend: Next.js API / Route Handlers.
 -   Database and authentication: Supabase with PostgreSQL.
 -   Hosting: Vercel + Supabase.
@@ -85,9 +85,8 @@ external calendar synchronization is not configured.
 
 ## Local development
 
-Copy `.env.example` to `.env.local` and fill in the values. The app builds
-without secrets, but sign-in needs Supabase Auth and planning needs
-`DATABASE_URL`.
+Copy `.env.example` to `.env` and fill in the values. The app builds
+without secrets. Planning needs `DATABASE_URL`. There is no login.
 
 ```bash
 pnpm install
@@ -95,9 +94,6 @@ docker compose up -d postgres
 pnpm db:migrate
 pnpm dev
 ```
-
-Create the single allowed user in the Supabase dashboard. Public signup is
-not offered. Set `ALLOWED_EMAIL` to that address.
 
 `AI_PROVIDER=mock` uses a deterministic local adapter and the UI labels it
 as such. OpenAI and Anthropic are used only when their keys are present.
@@ -108,9 +104,8 @@ Evening and weekly jobs are `POST /api/jobs/evening-review` and
 `Authorization: Bearer $CRON_SECRET`. The schedules in `vercel.json` are
 UTC; the job body uses the profile time zone.
 
-Before production, enable point-in-time recovery on the hosted Supabase
-project and keep `SUPABASE_SERVICE_ROLE_KEY` and `TOKEN_ENCRYPTION_KEY`
-only on the server.
+Keep `TOKEN_ENCRYPTION_KEY` only on the server. It encrypts the optional
+Google Calendar refresh token.
 
 ```bash
 pnpm test

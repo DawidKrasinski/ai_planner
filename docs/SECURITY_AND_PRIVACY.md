@@ -6,20 +6,22 @@ The application contains personal schedules, goals, routines, progress
 history, and potentially sensitive notes. Treat this information as
 private.
 
-## 2. Authentication and access
+## 2. Access
 
--   Use Supabase Auth for the private account.
--   Require authentication for all private application routes and APIs.
--   Enable Row Level Security on every user-owned table.
--   Authorize access server-side; never trust a client-supplied user ID.
--   Keep the initial deployment single-user, but do not rely on
-    obscurity or an unguessable URL.
+-   The application is a single-owner program and has no login.
+-   Pages and data APIs are available to whoever can reach the
+    deployment. Run it only on a machine or network the owner controls.
+-   Do not accept a client-supplied owner id. There is one local
+    dataset, with no per-user rows.
+-   Scheduled jobs still require `CRON_SECRET`.
+-   Google Calendar OAuth remains optional and is separate from access
+    to the application.
 
 ## 3. Secrets
 
 -   Store provider API keys and OAuth secrets only in server-side
     environment variables or a secure secret store.
--   Never expose Supabase service-role credentials to the browser.
+-   Never expose server secrets to the browser.
 -   Never commit `.env` files or credentials.
 -   Restrict production secrets from untrusted preview deployments.
 -   Rotate credentials if exposure is suspected.
@@ -91,8 +93,8 @@ changes.
 
 ## 10. Privacy-by-design checklist
 
--   [ ] RLS enabled and tested.
--   [ ] No service-role key in client bundles.
+-   [ ] No login and no per-user rows.
+-   [ ] No server secrets in client bundles.
 -   [ ] AI provider data sharing documented.
 -   [ ] OAuth tokens securely stored.
 -   [ ] Data export and deletion behavior defined.

@@ -5,11 +5,10 @@ before the corresponding functionality is considered complete.
 
 ## 1. Account and privacy
 
--   [ ] The private application requires authentication.
--   [ ] Unauthenticated users cannot access private pages or API data.
--   [ ] RLS prevents access to another user's records, even though the
-    initial product is single-user.
--   [ ] Service-role credentials are never exposed to the browser.
+-   [ ] The application opens without a login page.
+-   [ ] Planner data is stored once, without a user owner column.
+-   [ ] Scheduled jobs reject calls that do not present `CRON_SECRET`.
+-   [ ] Server secrets are never exposed to the browser.
 
 ## 2. Goals
 

@@ -1,27 +1,33 @@
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
-import { defaultSettings } from "@/domain/defaults";
 import { generateWeekPlan } from "@/services/planning";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describeDb = databaseUrl ? describe : describe.skip;
 
 describeDb("week plan persistence", () => {
-  const userId = crypto.randomUUID();
   const sql = postgres(databaseUrl ?? "", { max: 1 });
+  let goalId = "";
 
   afterAll(async () => {
-    await sql`DELETE FROM user_profiles WHERE id = ${userId}`;
-    await sql`DELETE FROM auth.users WHERE id = ${userId}`;
+    if (goalId) {
+      await sql`DELETE FROM goal_sessions WHERE goal_id = ${goalId}`;
+      await sql`DELETE FROM calendar_items WHERE source_goal_id = ${goalId}`;
+      await sql`DELETE FROM weekly_goal_budgets WHERE goal_id = ${goalId}`;
+      await sql`DELETE FROM goals WHERE id = ${goalId}`;
+    }
+    await sql`DELETE FROM weekly_plans WHERE generation_reason = 'integration'`;
     await sql.end();
   });
 
-  it("stores a feasible system plan without an AI provider", async () => {
-    await sql`INSERT INTO auth.users (id, email) VALUES (${userId}, ${"plan@example.com"})`;
-    await sql`INSERT INTO user_profiles (id, display_name, timezone) VALUES (${userId}, ${"Plan"}, ${"Europe/Warsaw"})`;
-    await sql`INSERT INTO user_settings (user_id, settings) VALUES (${userId}, ${sql.json(defaultSettings)})`;
-    await sql`INSERT INTO goals (user_id, name, category, manual_priority, difficulty, status) VALUES (${userId}, ${"Angielski"}, ${"learning_work"}, 3, 5, ${"active"})`;
-    const result = await generateWeekPlan(userId, {
+  it("stores a feasible system plan without an AI provider or a login", async () => {
+    const inserted = await sql<{ id: string }[]>`
+      INSERT INTO goals (name, category, manual_priority, difficulty, status)
+      VALUES (${"Angielski"}, ${"learning_work"}, 3, 5, ${"active"})
+      RETURNING id
+    `;
+    goalId = inserted[0]?.id ?? "";
+    const result = await generateWeekPlan({
       anchorDate: "2026-11-16",
       reason: "integration",
       actor: "system",
@@ -29,9 +35,13 @@ describeDb("week plan persistence", () => {
     });
     expect(result.planId).toBeTruthy();
     expect(result.summary).toContain("bez modelu AI");
-    const plans = await sql<{ status: string }[]>`SELECT status FROM weekly_plans WHERE user_id = ${userId}`;
+    const plans = await sql<{ status: string }[]>`
+      SELECT status FROM weekly_plans WHERE generation_reason = 'integration'
+    `;
     expect(plans.some((plan) => plan.status === "active")).toBe(true);
-    const blocks = await sql<{ count: string }[]>`SELECT count(*) FROM calendar_items WHERE user_id = ${userId} AND item_type = 'goal_session'`;
+    const blocks = await sql<{ count: string }[]>`
+      SELECT count(*) FROM calendar_items WHERE source_goal_id = ${goalId} AND item_type = 'goal_session'
+    `;
     expect(Number(blocks[0]?.count ?? 0)).toBeGreaterThan(0);
   });
 });

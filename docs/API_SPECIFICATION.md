@@ -7,7 +7,9 @@ may be refined during implementation.
 
 -   Base path: `/api`
 -   Format: JSON
--   Authentication: Supabase Auth session.
+-   Access: no application login. The deployment has one dataset.
+    Scheduled jobs require `CRON_SECRET`. Google Calendar uses its own
+    OAuth flow.
 -   Validation: schema validation at every write boundary.
 -   Time: ISO 8601 timestamps; persist UTC and interpret using the
     user's IANA timezone.

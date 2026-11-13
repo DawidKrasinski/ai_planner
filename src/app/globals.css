@@ -1,29 +1,70 @@
-@import "tailwindcss";
+@import "./meridian.css";
 
-@theme inline {
-  --color-paper: #f4f1eb;
-  --color-ink: #1c1917;
-  --color-muted: #57534e;
-  --color-line: #e7e0d6;
-  --color-card: #fffcf8;
-  --color-accent: #0f5f5c;
-  --color-accent-soft: #e5f3f2;
-  --color-danger: #9f1239;
-  --font-sans: var(--font-source);
-  --font-serif: var(--font-literata);
+.meridian-state {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 13px;
 }
 
-body {
-  background: var(--color-paper);
-  color: var(--color-ink);
-  font-family: var(--font-sans), sans-serif;
+.meridian-state.loading {
+  color: var(--muted);
+  background: #f3f3f5;
 }
 
-h1, h2, .serif {
-  font-family: var(--font-serif), serif;
+.meridian-state.error {
+  color: #7a1f2b;
+  background: #fff1f3;
+  border: 1px solid #f0c7ce;
+  display: grid;
+  gap: 10px;
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+.meridian-state.empty {
+  color: var(--muted);
+  background: #fff;
+  border: 1px dashed var(--border);
+}
+
+.period-tabs a {
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px 7px 0 0;
+  color: #74747d;
+  font-size: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.period-tabs a.active {
+  background: #ece9ff;
+  color: #5c4fd0;
+  font-weight: 600;
+}
+
+.nav-item,
+.bottom-nav a,
+.goal-row,
+.goal-mini,
+.goal-mobile,
+.full-link,
+.btn.ghost {
+  text-decoration: none;
+  color: inherit;
+}
+
+.bottom-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.bottom-nav a.active {
+  color: var(--ink);
 }

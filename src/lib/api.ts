@@ -39,13 +39,10 @@ export async function api<T>(work: () => Promise<T>): Promise<Response> {
   }
 }
 
-export function assertCronOrUser(request: Request, user: { id: string } | null): void {
+export function assertCron(request: Request): void {
   const envSecret = process.env.CRON_SECRET;
   const header = request.headers.get("authorization");
   if (envSecret && header === `Bearer ${envSecret}`) {
-    return;
-  }
-  if (user) {
     return;
   }
   throw new AppError("UNAUTHENTICATED", "Brak uprawnień do uruchomienia zadania.", 401);

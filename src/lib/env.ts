@@ -3,11 +3,7 @@ import { z } from "zod";
 const optionalUrl = z.url().optional().or(z.literal(""));
 
 export const ServerEnvSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: optionalUrl,
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1).optional().or(z.literal("")),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional().or(z.literal("")),
   DATABASE_URL: z.string().min(1).optional().or(z.literal("")),
-  ALLOWED_EMAIL: z.email().optional().or(z.literal("")),
   CRON_SECRET: z.string().min(16).optional().or(z.literal("")),
   TOKEN_ENCRYPTION_KEY: z.string().min(1).optional().or(z.literal("")),
   AI_PROVIDER: z.enum(["openai", "anthropic", "mock"]).default("mock"),
@@ -29,10 +25,6 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     throw new Error(`Nieprawidłowa konfiguracja środowiska: ${message}`);
   }
   return parsed.data;
-}
-
-export function isAuthConfigured(env: ServerEnv): boolean {
-  return Boolean(env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY && env.ALLOWED_EMAIL);
 }
 
 export function isDatabaseConfigured(env: ServerEnv): boolean {

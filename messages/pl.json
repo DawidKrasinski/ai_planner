@@ -19,17 +19,6 @@
     "saving": "Zapisywanie…",
     "edit": "Edytuj"
   },
-  "login": {
-    "title": "Menedżer osobisty",
-    "lead": "Prywatne konto do celów, planu tygodnia i przeglądu wykonania.",
-    "email": "Adres e-mail",
-    "password": "Hasło",
-    "submit": "Zaloguj",
-    "pending": "Logowanie…",
-    "missing": "Uzupełnij adres i hasło.",
-    "failed": "Logowanie nie powiodło się.",
-    "unconfigured": "Uwierzytelnianie nie jest skonfigurowane. Uzupełnij zmienne Supabase i ALLOWED_EMAIL."
-  },
   "dashboard": {
     "title": "Dzisiaj",
     "schedule": "Plan dnia",

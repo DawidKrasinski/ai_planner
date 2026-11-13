@@ -1,21 +1,22 @@
 import { expect, test } from "@playwright/test";
 
-test("login page is Polish and private pages redirect", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "Menedżer osobisty" })).toBeVisible();
+test("the app opens the dashboard without a login page", async ({ page }) => {
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(/\/dashboard/);
+  await expect(page.getByRole("navigation", { name: "Główna nawigacja" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  const login = await page.request.get("/login");
+  expect(login.status()).toBe(404);
 });
 
-test("login form reports a missing password or an unconfigured account", async ({ page }) => {
-  await page.goto("/login");
-  const alert = page.getByRole("alert");
-  const text = (await alert.textContent()) ?? "";
-  if (text.includes("nie jest skonfigurowane")) {
-    await expect(page.getByRole("button", { name: "Zaloguj" })).toBeDisabled();
-    return;
-  }
-  await page.getByLabel("Adres e-mail").fill("person@example.com");
-  await page.getByRole("button", { name: "Zaloguj" }).click();
-  await expect(alert).toContainText("hasło");
+test("main navigation reaches the five primary screens", async ({ page }) => {
+  await page.goto("/dashboard");
+  await page.getByRole("navigation", { name: "Główna nawigacja" }).getByRole("link", { name: "Kalendarz" }).click();
+  await expect(page).toHaveURL(/\/calendar/);
+  await page.getByRole("navigation", { name: "Główna nawigacja" }).getByRole("link", { name: "Cele" }).click();
+  await expect(page).toHaveURL(/\/goals/);
+  await page.getByRole("navigation", { name: "Główna nawigacja" }).getByRole("link", { name: "Dyscyplina i statystyki" }).click();
+  await expect(page).toHaveURL(/\/statistics/);
+  await page.getByRole("navigation", { name: "Główna nawigacja" }).getByRole("link", { name: "Ustawienia" }).click();
+  await expect(page).toHaveURL(/\/settings/);
 });

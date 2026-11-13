@@ -9,14 +9,14 @@ constraints, and reversible changes.
 
 ## Phase 0 --- Technical foundation
 
-Deliver: - Next.js + React + TypeScript project. - Supabase project and
-schema migration workflow. - Supabase Auth for the private account. -
-RLS policies and security tests. - Environment configuration for local,
-preview, and production. - Basic responsive application shell. - Error
-handling and structured logging.
+Deliver: - Next.js + React + TypeScript project. - PostgreSQL schema
+migration workflow. - A single local dataset with no application login.
+- Environment configuration for local and production. - Basic responsive
+application shell. - Error handling and structured logging.
 
-Exit criteria: - A private user can sign in. - Private data is protected
-by RLS. - Development and production environments are separated.
+Exit criteria: - The dashboard opens without a login. - Planner data has
+no user owner column. - Development and production environments are
+separated.
 
 ## Phase 1 --- Core domain and manual planner
 
