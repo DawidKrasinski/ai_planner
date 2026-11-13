@@ -1,0 +1,323 @@
+---
+description: Mandatory engineering standards for the AI Personal Manager project. Enforces specification-driven development, mobile-first UI, test-driven development, explicit frontend state handling, and strict Zod validation.
+alwaysApply: true
+---
+
+# Project Engineering Rules
+
+These rules are mandatory for every code change, feature, refactor, bug fix, and architectural decision in this repository.
+
+Follow them consistently. Do not ignore them for convenience or speed.
+
+## 1. Specification-Driven Development (SDD)
+
+The project documentation is the primary source of truth.
+
+Before implementing ANY change:
+
+1. Inspect the relevant documentation in the `/docs` directory.
+2. Identify the requirements, constraints, business rules, and architectural decisions related to the requested change.
+3. Verify that the proposed implementation is consistent with the documentation.
+4. Identify any conflicts, missing requirements, or ambiguities before writing code.
+
+Relevant documentation includes, but is not limited to:
+
+- `PROJECT_OVERVIEW.md`
+- `FUNCTIONAL_SPECIFICATION.md`
+- `AI_SYSTEM_SPECIFICATION.md`
+- `SCHEDULING_ENGINE.md`
+- `DATA_ARCHITECTURE.md`
+- `TECHNICAL_ARCHITECTURE.md`
+- `API_SPECIFICATION.md`
+- `UI_UX_SPECIFICATION.md`
+- `SECURITY_AND_PRIVACY.md`
+- `ACCEPTANCE_CRITERIA.md`
+- `IMPLEMENTATION_ROADMAP.md`
+
+### Documentation rules
+
+- Never silently introduce functionality that contradicts the specifications.
+- Never invent business rules when they are not documented.
+- If a requirement is ambiguous, ask for clarification or present a proposed interpretation before implementing it.
+- If a requested change requires modifying the architecture or established business rules, explain the impact first.
+- When implementation changes make documentation outdated, update the relevant documentation in the same task.
+- Keep documentation and implementation synchronized.
+
+Before completing a task, verify that the implementation satisfies the relevant documentation and acceptance criteria.
+
+## 2. Mobile-First Development
+
+All user interfaces MUST follow a mobile-first approach.
+
+Use **Tailwind CSS** for styling.
+
+### Mandatory rules
+
+- Design and implement the mobile layout first.
+- Start with the smallest supported viewport.
+- Add tablet and desktop layouts using Tailwind responsive breakpoints.
+- Use responsive utilities such as `sm:`, `md:`, `lg:`, and `xl:` only when necessary.
+- Never design a desktop layout first and attempt to squeeze it into mobile afterward.
+- Avoid fixed widths that cause horizontal overflow.
+- Ensure buttons, inputs, dialogs, menus, and interactive elements are usable on touchscreens.
+- Use appropriate spacing and readable typography on small screens.
+- Make complex layouts adapt naturally to smaller viewports.
+- Test important screens at mobile, tablet, and desktop sizes.
+
+### Tailwind CSS conventions
+
+- Prefer Tailwind utility classes over custom CSS.
+- Avoid unnecessary inline styles.
+- Extract reusable components when styling patterns are repeated.
+- Use consistent spacing, typography, and color conventions.
+- Do not introduce another styling framework without explicit approval.
+
+The application must remain fully functional on mobile browsers, not merely visually responsive.
+
+## 3. Test-Driven Development (TDD)
+
+Follow the TDD cycle for every feature and bug fix:
+
+1. **RED:** Write tests describing the expected behavior before implementing the functionality.
+2. Run the tests and verify that they fail for the expected reason.
+3. **GREEN:** Implement the minimum code necessary to make the tests pass.
+4. Run the tests again.
+5. **REFACTOR:** Improve the implementation while keeping all tests passing.
+
+### Testing requirements
+
+- Write unit tests for business logic and utility functions.
+- Write tests for validation schemas.
+- Write tests for API routes and application services.
+- Write component tests for important UI behavior.
+- Write integration tests for interactions between critical modules.
+- Write end-to-end tests for important user workflows.
+
+### Critical project areas
+
+Give special attention to tests covering:
+
+- Goal priority calculations.
+- Deadline urgency.
+- Weekly time-budget allocation.
+- Scheduling constraints.
+- Category time limits.
+- Priority 5 and 6 exceptional time borrowing.
+- Sleep protection.
+- Calendar conflicts.
+- Session completion and efficiency calculations.
+- Goal progress calculations.
+- AI-generated proposals and output validation.
+- Plan versioning, restoration, and change history.
+- Authentication and authorization.
+
+### Testing rules
+
+- Never implement a feature first and add tests afterward.
+- Never modify or delete a test just to make an implementation pass.
+- Never weaken assertions to hide a bug.
+- Do not mock the behavior that the test is supposed to verify.
+- Use mocks only for external dependencies when appropriate.
+- Always run relevant tests after modifying existing code.
+- Run the full test suite before considering a significant change complete.
+
+If a test cannot be written before implementation due to a technical limitation, explain why and propose an alternative verification strategy.
+
+## 4. Explicit Frontend State Management
+
+Every frontend component that manages or consumes asynchronous data MUST handle the following states explicitly:
+
+- `data`
+- `loading`
+- `error`
+
+Never assume that data is immediately available or that an asynchronous operation always succeeds.
+
+### Required behavior
+
+**Data state**
+- Handle successful responses.
+- Handle empty results.
+- Handle missing or optional values.
+- Render the correct UI for the available data.
+
+**Loading state**
+- Display an appropriate loading indicator or skeleton.
+- Prevent duplicate submissions when appropriate.
+- Avoid displaying misleading empty states while data is still loading.
+
+**Error state**
+- Handle failed requests.
+- Display a useful user-facing error message.
+- Provide a retry mechanism when appropriate.
+- Never silently swallow errors.
+- Do not expose internal stack traces or sensitive technical information to users.
+
+### Component conventions
+
+- Keep state handling predictable and localized where possible.
+- Avoid unnecessary duplicated state.
+- Avoid using `useEffect` for data fetching when a suitable data-fetching mechanism is available.
+- Use a consistent approach for asynchronous data fetching and caching.
+- Prefer reusable loading, error, and empty-state components.
+- Distinguish between an empty result and a failed request.
+
+### Example
+
+A data-driven component should follow a predictable state model:
+
+```ts
+type ResourceState<T> =
+  | { status: "loading"; data: null; error: null }
+  | { status: "success"; data: T; error: null }
+  | { status: "error"; data: null; error: Error };
+```
+
+This is an example of a discriminated union, not a requirement to use this exact abstraction everywhere.
+
+For forms, mutations, and background actions, also provide appropriate pending and error feedback.
+
+Do not create unnecessary state variables when the framework or data-fetching library already manages the relevant state.
+
+## 5. Strict Validation with Zod
+
+Use **Zod** for runtime validation of all untrusted data entering the application.
+
+TypeScript types alone are NOT sufficient for runtime validation.
+
+### Mandatory validation boundaries
+
+Use Zod to validate:
+
+- API request bodies.
+- API query parameters.
+- URL parameters where applicable.
+- Form submissions.
+- Environment variables.
+- External API responses.
+- AI-generated structured outputs.
+- Google Calendar integration payloads.
+- Data received from other untrusted sources.
+
+Validate data on the server even if it has already been validated on the frontend.
+
+### Type safety
+
+- Infer TypeScript types from Zod schemas using `z.infer`.
+- Avoid defining the same data structure independently in TypeScript and Zod.
+- Reuse schemas where appropriate.
+- Keep request, response, and domain schemas clearly separated when their requirements differ.
+- Use strict object schemas where appropriate to reject unexpected fields.
+- Handle optional, nullable, and default values explicitly.
+
+Example:
+
+```ts
+import { z } from "zod";
+
+export const CreateGoalSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  category: z.enum([
+    "training",
+    "learning_work",
+    "leisure",
+  ]),
+  priority: z.number().int().min(1).max(6),
+  difficulty: z.number().int().min(1).max(10),
+});
+
+export type CreateGoalInput = z.infer<
+  typeof CreateGoalSchema
+>;
+```
+
+### Validation error handling
+
+- Use `safeParse` or an equivalent controlled validation mechanism at external boundaries.
+- Return structured validation errors from API routes.
+- Never trust data because it originated from the frontend.
+- Never assume AI-generated JSON is valid.
+- Validate AI output before using it in business logic.
+- Do not use TypeScript assertions to bypass failed validation.
+
+### Strict TypeScript
+
+- Avoid `any`.
+- Avoid unnecessary type assertions (`as`).
+- Avoid `@ts-ignore` and `@ts-nocheck`.
+- Prefer `unknown` for untrusted values and narrow them through validation.
+- Use discriminated unions for state and domain variants.
+- Keep function inputs and outputs explicitly typed.
+- Ensure database responses are validated or safely mapped into domain types.
+
+The goal is to catch invalid data as early as possible and prevent runtime type errors.
+
+## 6. General Code Quality
+
+- Prefer small, focused, reusable modules.
+- Separate UI, application logic, domain logic, and infrastructure.
+- Keep business rules out of React components.
+- Do not put scheduling algorithms directly inside API route handlers.
+- Keep AI provider-specific code behind provider adapters.
+- Avoid unnecessary dependencies.
+- Follow existing project conventions before introducing new patterns.
+- Use meaningful names for variables, functions, files, and components.
+- Handle errors explicitly.
+- Avoid duplicated business logic.
+- Do not introduce abstractions without a clear benefit.
+
+## 7. AI and Scheduling Safety
+
+These rules are especially important for this project.
+
+- AI must never bypass the Scheduling Engine.
+- Every generated schedule must pass deterministic validation.
+- AI-generated data must be validated with Zod.
+- AI must not directly execute SQL or unrestricted code.
+- Never allow AI to modify hard constraints without the required user approval.
+- Preserve plan history and change logs.
+- Make AI-generated changes reversible.
+- Never silently overwrite completed session history.
+- Protect sleep according to the documented priority rules.
+- Preserve the distinction between efficiency, effective time, plan completion, and goal progress.
+
+## 8. Required Workflow Before Completing a Task
+
+Before declaring any task complete, verify:
+
+1. The relevant project documentation was reviewed.
+2. The implementation follows the documented requirements.
+3. Tests were written before implementation.
+4. Tests pass.
+5. TypeScript reports no relevant type errors.
+6. Zod validation is present at applicable data boundaries.
+7. Loading, data, error, and empty states are handled where applicable.
+8. The UI follows a mobile-first approach.
+9. No unrelated functionality was broken.
+10. Relevant documentation was updated if necessary.
+
+### Final response format
+
+After completing a task, provide a concise summary containing:
+
+- **What changed**
+- **Documentation reviewed or updated**
+- **Tests added**
+- **Tests executed and their results**
+- **TypeScript and validation status**
+- **Any remaining issues or assumptions**
+
+Never claim that tests passed unless they were actually executed successfully.
+
+## 9. Priority of These Rules
+
+These engineering rules apply to all implementation work.
+
+If a requested change conflicts with the project documentation or these rules:
+
+1. Stop before implementing the conflicting change.
+2. Explain the conflict.
+3. Identify which specification or rule is affected.
+4. Ask for clarification or propose a documented change.
+
+Do not silently ignore these rules.

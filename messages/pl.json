@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "dashboard": "Pulpit",
+    "calendar": "Kalendarz",
+    "goals": "Cele",
+    "statistics": "Dyscyplina",
+    "settings": "Ustawienia",
+    "history": "Historia",
+    "assistant": "Asystent"
+  },
+  "common": {
+    "loading": "Wczytywanie…",
+    "empty": "Brak danych.",
+    "error": "Nie udało się wczytać danych.",
+    "retry": "Spróbuj ponownie",
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "confirm": "Potwierdź",
+    "saving": "Zapisywanie…",
+    "edit": "Edytuj"
+  },
+  "login": {
+    "title": "Menedżer osobisty",
+    "lead": "Prywatne konto do celów, planu tygodnia i przeglądu wykonania.",
+    "email": "Adres e-mail",
+    "password": "Hasło",
+    "submit": "Zaloguj",
+    "pending": "Logowanie…",
+    "missing": "Uzupełnij adres i hasło.",
+    "failed": "Logowanie nie powiodło się.",
+    "unconfigured": "Uwierzytelnianie nie jest skonfigurowane. Uzupełnij zmienne Supabase i ALLOWED_EMAIL."
+  },
+  "dashboard": {
+    "title": "Dzisiaj",
+    "schedule": "Plan dnia",
+    "priorities": "Aktywne priorytety",
+    "emptyDay": "Na dziś nie zaplanowano żadnych bloków.",
+    "plan": "Ułóż tydzień"
+  },
+  "goals": {
+    "title": "Cele",
+    "empty": "Nie masz jeszcze celów. Dodaj cel ręcznie albo potwierdź propozycję asystenta.",
+    "create": "Nowy cel",
+    "pause": "Wstrzymaj",
+    "resume": "Wznów",
+    "complete": "Zakończ",
+    "archive": "Archiwizuj"
+  },
+  "calendar": {
+    "title": "Tydzień",
+    "empty": "Ten tydzień nie ma jeszcze bloków.",
+    "add": "Dodaj zdarzenie",
+    "replan": "Przelicz tydzień",
+    "aiPlan": "Plan z AI"
+  },
+  "statistics": {
+    "title": "Dyscyplina",
+    "empty": "Brak zapisanych sesji w wybranym okresie.",
+    "effective": "Czas efektywny",
+    "completion": "Wykonanie planu",
+    "efficiency": "Średnia efektywność",
+    "difficulty": "Trudność",
+    "progress": "Postęp celów jest liczony osobno i nie wynika z efektywności."
+  },
+  "settings": {
+    "title": "Ustawienia",
+    "sleep": "Sen i dzień",
+    "budgets": "Budżety kategorii",
+    "google": "Google Calendar",
+    "memory": "Pamięć asystenta",
+    "privacy": "Dane"
+  },
+  "assistant": {
+    "title": "Asystent",
+    "placeholder": "Napisz, co chcesz zaplanować…",
+    "send": "Wyślij",
+    "mock": "Działa lokalny adapter testowy. To nie jest odpowiedź modelu.",
+    "confirmGoal": "Utwórz cel",
+    "unavailable": "Asystent jest niedostępny. Plan możesz układać ręcznie."
+  }
+}

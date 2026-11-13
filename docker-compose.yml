@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: planner
+      POSTGRES_PASSWORD: planner
+      POSTGRES_DB: planner
+    ports:
+      - "54329:5432"
+    volumes:
+      - planner_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U planner -d planner"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  planner_pg:
